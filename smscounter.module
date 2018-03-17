@@ -1,0 +1,196 @@
+<?php
+
+/**
+ * @file
+ * Showing SMS packet counts, Characters left, Encoding used by SMS etc.
+ */
+
+/**
+ * Implements hook_help().
+ */
+function smscounter_help($path, $arg) {
+  $output = '';
+  switch ($path) {
+    case 'admin/modules#description':
+      $output .= t('Showing SMS packet counts, Characters left for each packet, Encoding used by SMS etc.');
+      break;
+
+    case 'admin/config/user-interface/sms-counter':
+      $output .= t('<p>Showing SMS packet counts, Characters left for each packet, Encoding used by SMS etc. settings could be found at !link</p>', array('!link' => l(t('here'), 'admin/config/user-interface/sms-counter')));
+      break;
+  }
+  return $output;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function smscounter_permission() {
+  return array(
+    'administer smscounter' => array(
+      'title' => t('Administer SMS Counter'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function smscounter_menu() {
+  $items['admin/config/user-interface/sms-counter'] = array(
+    'title' => 'SMS Counter',
+    'description' => 'Configure SMS Counter',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('smscounter_admin_settings'),
+    'access arguments' => array('administer smscounter'),
+    'file' => 'includes/smscounter.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function smscounter_libraries_info() {
+  $libraries['sms-counter'] = array(
+    'name' => 'SMSCounter',
+    'vendor url' => 'https://github.com/danxexe/sms-counter',
+    'files' => array(
+      'js' => array(
+        'sms_counter.min.js',
+      ),
+    ),
+    'variants' => array(
+      'minified' => array(
+        'files' => array(
+          'js' => array(
+            'sms_counter.min.js',
+          ),
+        ),
+      ),
+      'source' => array(
+        'files' => array(
+          'js' => array(
+            'sms_counter.js',
+          ),
+        ),
+      ),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function smscounter_theme($existing, $type, $theme, $path) {
+  return array(
+    'smscounter_display' => array(
+      'variables' => array(
+        'encoding' => NULL,
+        'messages' => NULL,
+        'per_message' => NULL,
+        'length' => NULL,
+        'remaining' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function smscounter_element_info_alter(&$type) {
+  $type['textarea']['#process'][] = 'smscounter_process_element';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function smscounter_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Add settings for the sms counter.
+  $fields = array('text_textarea_with_summary', 'text_textarea');
+  if (in_array($form['#instance']['widget']['type'], $fields)) {
+    $form['instance']['widget']['settings']['smscounter'] = array(
+      '#type' => 'checkbox',
+      '#title' => 'SMS counter',
+      '#description' => t('This will show SMS packet counts, Characters left for each packet, Encoding used by SMS etc. below the field, settings could be found at !link', array('!link' => l(t('here'), 'admin/config/user-interface/sms-counter'))),
+      '#default_value' => isset($form['#instance']['widget']['settings']['smscounter']) ? $form['#instance']['widget']['settings']['smscounter'] : NULL,
+    );
+  }
+}
+
+/**
+ * Process handler for the form elements that can have smscounter attribute.
+ */
+function smscounter_process_element($element, &$form_state) {
+  if (isset($element['#smscounter']) && $element['#smscounter']) {
+    $sms_counter_library = libraries_load('sms-counter');
+    $smscounter_display = variable_get('smscounter_display', array());
+    $smscounter_js_compression = variable_get('smscounter_js_compression', array());
+    $element['#attributes']['class'][] = 'sms-counter';
+    $smscounter_description = '';
+    if (!empty($smscounter_display)) {
+      $smscounter_description = theme('smscounter_display', $smscounter_display);
+    }
+
+    $description = isset($element['#description']) ? $element['#description'] : '';
+    $description .= $smscounter_description;
+
+    $element['#description'] = $description;
+
+    if ($smscounter_js_compression == 'min') {
+      $element['#attached']['js'][] = $sms_counter_library['library path'] . '/sms_counter.min.js';
+    }
+    else {
+      $element['#attached']['js'][] = $sms_counter_library['library path'] . '/sms_counter.js';
+    }
+
+    $element['#attached']['js'][] = drupal_get_path('module', 'smscounter') . '/js/sms-counter.js';
+    $element['#attached']['css'][] = drupal_get_path('module', 'smscounter') . '/css/sms-counter.css';
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_attach_form().
+ */
+function smscounter_field_attach_form($entity_type, $entity, &$form, &$form_state, $langcode) {
+  $fields = field_info_instances($entity_type, $form['#bundle']);
+  // Check if any of the fields has a #smscounter setting.
+  foreach ($fields as $field_name => $value) {
+    if (isset($value['widget']['settings']['smscounter'])) {
+      $elements[$field_name] = $value;
+    }
+  }
+  if (isset($elements)) {
+    _smscounter_children($form, $elements);
+  }
+}
+
+/**
+ * Recursively add the #smscounter property to the elements of a form.
+ *
+ * @param array $element
+ *   The form element to start looking for.
+ * @param array $ms_elements
+ *   An associative array of api field elements as returned by
+ *   field_info_instances() that the #smscounter properties should be set,
+ *   with the field_name as a key and the field_data as the value.
+ */
+function _smscounter_children(array &$element, array $ms_elements) {
+  $children = element_get_visible_children($element);
+  foreach ($children as $child) {
+    // If the field settings for smscounter are set then add #smscounter = TRUE.
+    if (isset($element[$child]['#field_name']) && isset($ms_elements[$element[$child]['#field_name']])) {
+      $settings = $ms_elements[$element[$child]['#field_name']]['widget']['settings'];
+      if (isset($settings['smscounter']) && $settings['smscounter']) {
+        $element[$child]['#smscounter'] = TRUE;
+      }
+    }
+    _smscounter_children($element[$child], $ms_elements);
+  }
+}

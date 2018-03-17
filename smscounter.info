@@ -1,0 +1,5 @@
+name = SMS Counter
+description = Show SMS counter, character left under textarea.
+core = 7.x
+package = Fields
+configure = admin/config/user-interface/sms-counter

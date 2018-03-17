@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the smscounter module.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function smscounter_requirements($phase) {
+  $requirements = array();
+  if ($phase == 'runtime') {
+    // Ensure translations do not break at install time.
+    $t = get_t();
+
+    $library = libraries_detect('sms-counter');
+
+    $requirements['sms-counter']['title'] = $t('SMS Counter');
+
+    // Ensure the sms-counter library is present.
+    if ($library['installed']) {
+      $requirements['sms-counter']['value'] = $t('Installed');
+      $requirements['sms-counter']['severity'] = REQUIREMENT_OK;
+    }
+    else {
+      $requirements['sms-counter']['value'] = $t('Not installed');
+      $requirements['sms-counter']['severity'] = REQUIREMENT_ERROR;
+      $requirements['sms-counter']['description'] = $t('Please download the smscounter from !link.', array('!link' => l($t('Superfish project homepage'), 'http://drupal.org/project/smscounter')));
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function smscounter_uninstall() {
+  variable_del('smscounter_display');
+  variable_del('smscounter_js_compression');
+}
