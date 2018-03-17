@@ -1,0 +1,11 @@
+.sms-counter-desc {
+  margin: 0 5px;
+}
+
+.sms-counter-desc:first-child {
+  margin-left: 0;
+}
+
+.sms-counter-desc:last-child {
+  margin-right: 0;
+}
